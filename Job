@@ -1,0 +1,688 @@
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.issue.fields.CustomField
+import com.atlassian.jira.issue.MutableIssue
+import com.atlassian.jira.event.type.EventDispatchOption
+import java.util.ArrayList;
+  
+Class objectFacadeClass = ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.channel.external.api.facade.ObjectFacade");
+def objectFacade = ComponentAccessor.getOSGiComponentInstanceOfType(objectFacadeClass);
+  
+Class iqlFacadeClass = ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.channel.external.api.facade.IQLFacade");
+def iqlFacade = ComponentAccessor.getOSGiComponentInstanceOfType(iqlFacadeClass);
+
+/* Get Insight Object Attribute Facade from plugin accessor */
+Class objectTypeAttributeFacadeClass = ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.channel.external.api.facade.ObjectTypeAttributeFacade"); 
+def objectTypeAttributeFacade = ComponentAccessor.getOSGiComponentInstanceOfType(objectTypeAttributeFacadeClass);
+
+// objectAttributeBeanFactory
+def objectAttributeBeanFactory = ComponentAccessor.getOSGiComponentInstanceOfType(ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.services.model.factory.ObjectAttributeBeanFactory"));
+
+//checking in ObjectType = Source_RBA_Matrix  
+int schemaId = 25
+int buId = 132626
+int sbuId = 132627
+int roleId = 132621
+int detailsId = 132632
+int entityId = 132629
+int actionItemsId = 132630
+int snAssignmentQueueId = 132633
+int typeId = 132628
+int mirriorId = 132634
+int cotivitiDomainGroupsId = 131785
+int softwareId = 131795
+int hardwareId = 131794
+int accountId = 131793
+int ccaGroupsId = 131784
+int verscendDomainGroupsId = 131792
+int hrpDomainGroupsId = 131788
+int mediconnectGroupsId = 131790
+int hciGroupsId = 131787
+int ihtDmainGroupsId = 131789
+int d2hDmainGroupsId = 131786
+int tiermedDCDmainGroupsId = 131791
+int d2hsDmainGroupsId = 131801
+int genericServiceRequestId = 131796
+int latestId = 132639
+int readyForProductionId = 132640
+int RBAMATRIX_objectTypeId = 10101
+int rbaMatrixRoleId = 131778
+int rbaMatrixParentBUNameId = 131781
+int rbaMatrixsbuNameId = 131782
+
+def sourceRbaMatrix = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX");
+Set<RbaCombination> rbaCombinations = new HashSet<>(sourceRbaMatrix.size())
+
+sourceRbaMatrix.each {
+    currentObject ->
+    String bu = objectFacade.loadObjectAttributeBean(currentObject.getId(), buId).getObjectAttributeValueBeans()[0].getTextValue();
+   	String sbu = objectFacade.loadObjectAttributeBean(currentObject.getId(), sbuId).getObjectAttributeValueBeans()[0].getTextValue(); 
+    String role = objectFacade.loadObjectAttributeBean(currentObject.getId(), roleId).getObjectAttributeValueBeans()[0].getTextValue();
+    
+    rbaCombinations.add(new RbaCombination(bu, sbu, role))
+}
+
+rbaCombinations.each {
+    rbaCombination ->
+    String bu = rbaCombination.bu;
+    String sbu = rbaCombination.sbu;
+    String role = rbaCombination.role;
+    
+    String software = null;
+    String hardware = null;
+    String cotivitiDomainGroups = null;
+    String actionItems = null;
+    String account = null;
+    String ccaGroups = null;
+    String verscendDomainGroups = null;
+    String hrpDomainGroups = null;
+    String mediconnectGroups = null;
+    String hciGroups = null;
+    String ihtDmainGroups = null;
+    String d2hDmainGroups = null;
+    String tiermedDCDmainGroups = null;
+    String d2hsDmainGroups = null;
+    String genericServiceRequest = null;
+    String latest = true;
+    String readyForProduction = true;
+    
+    //Calculate the values
+    def sourceRbaMatrix_cotiviti = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"cotiviti.com\")");
+    
+    //calculate Cotivti Domain Groups
+    List<String> actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_cotiviti).each {sourceRbaMatrix_cotiviti_obj ->
+        def sourceActionItem = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_cotiviti_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem) {
+            actionItemsList.add(sourceActionItem.getTextValue());
+        }
+    }
+    Collections.sort(actionItemsList);
+	cotivitiDomainGroups = actionItemsList.join(",");
+    actionItemsList = null;
+    
+    //software
+	def sourceRbaMatrix_software = iqlFacade.findObjectsByIQLAndSchema(schemaId,"objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND \"Role\" = \"${role}\" AND \"Type\" IN (\"SW-Catalog\") AND \"Entity\" IN (\"JIRA\") AND \"Action Item\" NOT IN (\"Generic Service Request\")");
+    List<String> softwares = new ArrayList<>()
+    (sourceRbaMatrix_software).each {sourceRbaMatrix_software_obj ->
+        def sourceActionItem_software = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_software_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        def details = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_software_obj.getId(), detailsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_software) {
+            softwares.add("${sourceActionItem_software.getTextValue()} : ${details.getTextValue()}");
+        }
+    }
+    Collections.sort(softwares);
+    software = softwares.join(",");
+    softwares = null;
+    
+    //Hardware
+    def sourceRbaMatrix_hardware = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"HW-Catalog\") AND \"Entity\" IN (\"JIRA\") AND \"Action Item\" NOT IN (\"Generic Service Request\")");
+    List<String> hardwares = new ArrayList<>();
+    (sourceRbaMatrix_hardware).each {sourceRbaMatrix_hardware_obj ->
+        def sourceActionItem_hardware = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_hardware_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_hardware) {
+            hardwares.add(sourceActionItem_hardware.getTextValue())
+        }
+    }
+    Collections.sort(hardwares);
+    hardware = hardwares.join(",")
+    hardwares = null;
+    
+    //Create Account Items
+    def sourceRbaMatrix_account = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"Account\") OR \"Type\" IN (\"account creation\")");
+    List<String> entities = new ArrayList<>();
+    (sourceRbaMatrix_account).each {sourceRbaMatrix_account_obj ->
+        def sourceActionItem_Entity = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_account_obj.getId(), entityId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_Entity) {
+            entities.add(sourceActionItem_Entity.getTextValue());
+        }
+    }
+    Collections.sort(entities);
+    account = entities.join(",");
+    entities = null;
+
+	//CCA Domain Groups
+    def sourceRbaMatrix_ccagroup = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"ccaintranet.com\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_ccagroup).each {sourceRbaMatrix_ccagroup_obj ->
+        def sourceActionItem_ccagroup = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_ccagroup_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_ccagroup) {
+            actionItemsList.add(sourceActionItem_ccagroup.getTextValue());
+        }
+    }
+    Collections.sort(actionItemsList);
+    ccaGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+    //Verscend Domain Groups
+    def sourceRbaMatrix_verscend = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"verscend.net\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_verscend).each {sourceRbaMatrix_verscend_obj ->
+        def sourceActionItem_verscend = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_verscend_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_verscend) {
+           actionItemsList.add(sourceActionItem_verscend.getTextValue())
+        }
+    }
+	verscendDomainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+
+    //HRP Domain Groups
+    def sourceRbaMatrix_hrp = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"hrp.local\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_hrp).each {sourceRbaMatrix_hrp_obj ->
+        def sourceActionItem_hrp = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_hrp_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_hrp) {
+            actionItemsList.add(sourceActionItem_hrp.getTextValue())
+        }
+    }
+	hrpDomainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+	//Mediconnect Domain Groups
+    def sourceRbaMatrix_Mediconnect = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"mediconnect.net\")");
+    actionItemsList = new ArrayList<String>();
+    def actionItems_Mediconnect = ""; //mediconnect.net"
+    (sourceRbaMatrix_Mediconnect).each {sourceRbaMatrix_Mediconnect_obj ->
+        def sourceActionItem_Mediconnect = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_Mediconnect_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_Mediconnect) {
+            actionItemsList.add(sourceActionItem_Mediconnect.getTextValue());
+        }
+    }
+	mediconnectGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+    //healthcareinsight Groups
+	def sourceRbaMatrix_hci = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"healthcareinsight.local\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_hci).each {sourceRbaMatrix_hci_obj ->
+        def sourceActionItem_hci = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_hci_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_hci) {
+            actionItemsList.add(sourceActionItem_hci.getTextValue())
+        }
+    }
+	hciGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+    //IHT Domain Groups
+    def sourceRbaMatrix_iht = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"ihtech.com\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_iht).each {sourceRbaMatrix_iht_obj ->
+        def sourceActionItem_iht = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_iht_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_iht) {
+            actionItemsList.add(sourceActionItem_iht.getTextValue())
+        }
+    }
+	ihtDmainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+    //D2H Domain Groups
+    def sourceRbaMatrix_d2h = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"d2hawkeye.net\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_d2h).each {sourceRbaMatrix_d2h_obj ->
+        def sourceActionItem_d2h = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_d2h_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_d2h) {
+            actionItemsList.add(sourceActionItem_d2h.getTextValue())
+        }
+    }
+	d2hDmainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+
+    //TiermedDC Domain Groups
+    def sourceRbaMatrix_TiermedDC = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"tiermeddc.inc\")");
+    actionItemsList = new ArrayList<String>();
+    def actionItems_TiermedDC = "";
+    (sourceRbaMatrix_TiermedDC).each {sourceRbaMatrix_TiermedDC_obj ->
+        def sourceActionItem_TiermedDC = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_TiermedDC_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_TiermedDC) {
+            actionItemsList.add(sourceActionItem_TiermedDC.getTextValue())
+        }
+    }
+	tiermedDCDmainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+    
+    //D2HS Domain Groups d2hscom
+    def sourceRbaMatrix_d2hs = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\" AND \"Type\" IN (\"AD-Group\") AND \"Entity\" IN (\"d2hs.com\")");
+    actionItemsList = new ArrayList<String>();
+    (sourceRbaMatrix_d2hs).each {sourceRbaMatrix_d2hs_obj ->
+        def sourceActionItem_d2hs = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_d2hs_obj.getId(), actionItemsId).getObjectAttributeValueBeans()[0];
+        
+        if (sourceActionItem_d2hs) {
+            actionItemsList.add(sourceActionItem_d2hs.getTextValue())
+        }
+    }
+	d2hsDmainGroups = actionItemsList.join(",")
+    actionItemsList = null;
+
+    List<String> genericServiceRequests = new ArrayList<>();
+	def sourceRbaMatrix_gsr = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND \"Role\" = \"${role}\" AND \"Type\" IN (\"SW-Catalog\", \"HW-Catalog\")");
+    (sourceRbaMatrix_gsr).each {
+		sourceRbaMatrix_gsr_obj -> 
+        def assignmentGroup = "Service Desk Requests";
+        def source_AssignmentQueue = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_gsr_obj.getId(),snAssignmentQueueId);
+        def source_AssignmentQueue_ValueBeans = null
+		if (source_AssignmentQueue != null) { 
+			source_AssignmentQueue_ValueBeans = source_AssignmentQueue.getObjectAttributeValueBeans();
+		}
+		if (source_AssignmentQueue_ValueBeans != null) {
+			assignmentGroup = source_AssignmentQueue_ValueBeans[0].getTextValue();
+		}
+
+		String mirriorIds = "";
+		def source_MirriorID = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_gsr_obj.getId(), mirriorId);
+		def source_MirriorID_ValueBeans = null
+		if (source_MirriorID != null) {
+			source_MirriorID_ValueBeans = source_MirriorID.getObjectAttributeValueBeans();
+		}
+		if (source_MirriorID_ValueBeans != null) {
+			mirriorIds = " - Mirror ID:${source_MirriorID_ValueBeans[0].getTextValue()}"
+		}       
+		def sourceRbaMatrix_details = objectFacade.loadObjectAttributeBean(sourceRbaMatrix_gsr_obj.getId(), detailsId).getObjectAttributeValueBeans()[0];
+		String genericServiceRequestVal = ("${sourceRbaMatrix_details.getTextValue()}${mirriorIds}#@#${assignmentGroup}");
+		genericServiceRequests.add(genericServiceRequestVal)
+	}
+	genericServiceRequest = genericServiceRequests.join(",");
+	genericServiceRequests = null; 
+	          
+    //DEBUG
+    def currentCombinationObjects = iqlFacade.findObjectsByIQLAndSchema(schemaId, "objectType = SOURCE_RBA_MATRIX AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role\" = \"${role}\"");
+    log.warn("bu : ${rbaCombination.bu}, sbu : ${rbaCombination.sbu}, role : ${rbaCombination.role}");
+    log.warn("currentCombinationObjects : ${currentCombinationObjects.size()}");
+	log.warn("cotivitiDomainGroups : ${cotivitiDomainGroups}")
+    log.warn("software : ${software}");
+    log.warn("hardware : ${hardware}");
+    log.warn("account : ${account}");
+    log.warn("ccaGroups : ${ccaGroups}");
+    log.warn("verscendDomainGroups : ${verscendDomainGroups}");
+    log.warn("hrpDomainGroups : ${hrpDomainGroups}");
+    log.warn("mediconnectGroups : ${mediconnectGroups}");
+    /*if (hciGroups != null && hciGroups != "") {
+	    log.warn("hciGroups : ${hciGroups}");
+    }*/
+    log.warn("hciGroups : ${hciGroups}");
+    log.warn("ihtDmainGroups : ${ihtDmainGroups}");
+    log.warn("d2hDmainGroups : ${d2hDmainGroups}");
+    log.warn("tiermedDCDmainGroups : ${tiermedDCDmainGroups}");
+    log.warn("d2hsDmainGroups : ${d2hsDmainGroups}");
+    log.warn("genericServiceRequest : ${genericServiceRequest}");
+    
+    def rbaiql = "objectTypeId = ${RBAMATRIX_objectTypeId} AND \"Parent BU Name\" = \"${bu}\" AND \"Sub BU Name\" = \"${sbu}\" AND  \"Role Title\" = \"${role}\""
+    def rbaMatrixObjects = iqlFacade.findObjectsByIQLAndSchema(schemaId, rbaiql);
+    log.warn("rbaMatrixObjects : ${rbaMatrixObjects.size()}");
+    if(rbaMatrixObjects.isEmpty()) {
+        // Insert Logic
+        Class objectTypeFacadeClass = ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.channel.external.api.facade.ObjectTypeFacade"); 
+        def objectTypeFacade = ComponentAccessor.getOSGiComponentInstanceOfType(objectTypeFacadeClass);
+
+        
+          def objectTypeRBAMatrix = objectTypeFacade.loadObjectTypeBean(RBAMATRIX_objectTypeId);
+        /* Create a new unsaved object bean */
+          def newObjectBean = objectTypeRBAMatrix.createMutableObjectBean();
+          def objectAttributeBeans = new ArrayList();
+          def rolebjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(rbaMatrixRoleId);
+          def parentBuNameobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(rbaMatrixParentBUNameId);
+          def sbuNamebjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(rbaMatrixsbuNameId);
+          def latestobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(latestId);
+          def readyForProductionobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(readyForProductionId);
+          def cotivitiDomainGroupobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(cotivitiDomainGroupsId);
+          def softwareobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(softwareId);
+          def hardwareDomainGroupobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hardwareId);
+          def createAccountobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(accountId);
+          def ccaGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(ccaGroupsId);
+          def verscendDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(verscendDomainGroupsId);
+          def hrpDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hrpDomainGroupsId);
+          def mediconnectDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(mediconnectGroupsId);
+          def hciDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hciGroupsId);
+          def ihtDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(ihtDmainGroupsId);
+          def d2hDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(d2hDmainGroupsId);
+          def tiermedDCDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(tiermedDCDmainGroupsId);
+          def d2hsDomainGroupsobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(d2hsDmainGroupsId);
+          def genericServiceRequestobjectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(genericServiceRequestId);
+        
+          objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, rolebjectTypeAttributeBean, role));
+          objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, parentBuNameobjectTypeAttributeBean, bu));
+          objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, sbuNamebjectTypeAttributeBean, sbu));
+          objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, latestobjectTypeAttributeBean, latest));
+          objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, readyForProductionobjectTypeAttributeBean, readyForProduction));
+          if(cotivitiDomainGroups != null && cotivitiDomainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, cotivitiDomainGroupobjectTypeAttributeBean, cotivitiDomainGroups));
+          }
+          if(software != null && software != "") {
+            objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, softwareobjectTypeAttributeBean, software));
+          }
+          if(hardware != null && hardware != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, hardwareDomainGroupobjectTypeAttributeBean, hardware));
+          }
+          if(account != null && account != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, createAccountobjectTypeAttributeBean, account));
+          }
+          if(ccaGroups != null && ccaGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, ccaGroupsobjectTypeAttributeBean, ccaGroups));
+          }
+          if(verscendDomainGroups != null && verscendDomainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, verscendDomainGroupsobjectTypeAttributeBean, verscendDomainGroups));
+          }
+          if(hrpDomainGroups != null && hrpDomainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, hrpDomainGroupsobjectTypeAttributeBean, hrpDomainGroups));
+          }
+          if(mediconnectGroups != null && mediconnectGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, mediconnectDomainGroupsobjectTypeAttributeBean, mediconnectGroups));
+          }
+          if(hciGroups != null && hciGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, hciDomainGroupsobjectTypeAttributeBean, hciGroups));
+          }
+          if(ihtDmainGroups != null && ihtDmainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, ihtDomainGroupsobjectTypeAttributeBean, ihtDmainGroups));
+          }
+          if(d2hDmainGroups != null && d2hDmainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, d2hDomainGroupsobjectTypeAttributeBean, d2hDmainGroups));
+          }
+          if(tiermedDCDmainGroups != null && tiermedDCDmainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, tiermedDCDomainGroupsobjectTypeAttributeBean, tiermedDCDmainGroups));
+          }
+          if(d2hsDmainGroups != null && d2hsDmainGroups != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, d2hsDomainGroupsobjectTypeAttributeBean, d2hsDmainGroups));
+          }
+          if(genericServiceRequest != null && genericServiceRequest != "") {
+              objectAttributeBeans.add(objectAttributeBeanFactory.createObjectAttributeBeanForObject(newObjectBean, genericServiceRequestobjectTypeAttributeBean, genericServiceRequest));
+          }
+        
+            /* Set all object attributes to the object */
+              newObjectBean.setObjectAttributeBeans(objectAttributeBeans);
+            /* Store the object into Insight. The new ObjectBean will be updated with an unique ID */
+              try {
+                newObjectBean = objectFacade.storeObjectBean(newObjectBean);
+                log.warn("newObjectBean: " + newObjectBean);
+            } catch (Exception vie) {
+                log.warn("Could not create issue due to validation exception:" + vie.getMessage());
+            }
+}
+        
+      else {
+        //Update Logic
+        def rbaMatrixObject = rbaMatrixObjects[0];
+
+        def objectTypeAttributeBean = objectTypeAttributeFacade.loadObjectTypeAttributeBean(cotivitiDomainGroupsId)
+        def newObjectAttributeBean = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean, cotivitiDomainGroups);
+
+        /* Load the attribute bean */
+        def objectAttributeBean = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean.getId());
+        if (objectAttributeBean != null) {
+            /* If attribute exist reuse the old id for the new attribute */
+            newObjectAttributeBean.setId(objectAttributeBean.getId());
+        }
+        /* Store the object attribute into Insight. */
+        try {
+            objectAttributeBean = objectFacade.storeObjectAttributeBean(newObjectAttributeBean);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    
+          // Software
+       def objectTypeAttributeBean_software = objectTypeAttributeFacade.loadObjectTypeAttributeBean(softwareId)
+       def newObjectAttributeBean_software = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_software, software);
+
+        def objectAttributeBean_software = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_software.getId());
+        if (objectAttributeBean_software != null) {
+            newObjectAttributeBean_software.setId(objectAttributeBean_software.getId());
+        }
+        try {
+            objectAttributeBean_software = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_software);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+     // Hardware
+       def objectTypeAttributeBean_hardware = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hardwareId)  
+       def newObjectAttributeBean_hardware = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_hardware, hardware);
+
+        def objectAttributeBean_hardware = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_hardware.getId());
+        if (objectAttributeBean_hardware != null) {
+            newObjectAttributeBean_hardware.setId(objectAttributeBean_hardware.getId());
+        }
+        try {
+            objectAttributeBean_hardware = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_hardware);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    
+       // Create Account
+       def objectTypeAttributeBean_account = objectTypeAttributeFacade.loadObjectTypeAttributeBean(accountId)
+       def newObjectAttributeBean_account = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_account, account);
+
+        def objectAttributeBean_account = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_account.getId());
+        if (objectAttributeBean_account != null) {
+            newObjectAttributeBean_account.setId(objectAttributeBean_account.getId());
+        }
+        try {
+            objectAttributeBean_account = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_account);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    	// CCA domain group
+        def objectTypeAttributeBean_cca = objectTypeAttributeFacade.loadObjectTypeAttributeBean(ccaGroupsId)
+        def newObjectAttributeBean_cca = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_cca, ccaGroups);
+
+        def objectAttributeBean_cca = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_cca.getId());
+        if (objectAttributeBean_cca != null) {
+            newObjectAttributeBean_cca.setId(objectAttributeBean_cca.getId());
+        }
+        try {
+            objectAttributeBean_cca = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_cca);
+        } catch (Exception vie) {
+            log.warn("cca - Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+       // Verscend Domain Groups 
+        def objectTypeAttributeBean_verscend = objectTypeAttributeFacade.loadObjectTypeAttributeBean(verscendDomainGroupsId)
+        def newObjectAttributeBean_verscend = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_verscend, verscendDomainGroups);
+
+        def objectAttributeBean_verscend = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_verscend.getId());
+        if (objectAttributeBean_verscend != null) {
+            newObjectAttributeBean_verscend.setId(objectAttributeBean_verscend.getId());
+        }
+        try {
+            objectAttributeBean_verscend = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_verscend);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+       // HRP Domain groups 
+        def objectTypeAttributeBean_hrp = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hrpDomainGroupsId)
+        def newObjectAttributeBean_hrp = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_hrp, hrpDomainGroups);
+
+        def objectAttributeBean_hrp = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_hrp.getId());
+        if (objectAttributeBean_hrp != null) {
+            newObjectAttributeBean_hrp.setId(objectAttributeBean_hrp.getId());
+        }
+        try {
+            objectAttributeBean_hrp = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_hrp);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+        // Mediconnect Domain Groups 
+        def objectTypeAttributeBean_Mediconnect = objectTypeAttributeFacade.loadObjectTypeAttributeBean(mediconnectGroupsId)
+        def newObjectAttributeBean_Mediconnect = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_Mediconnect, mediconnectGroups);
+
+        def objectAttributeBean_Mediconnect = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_Mediconnect.getId());
+        if (objectAttributeBean_Mediconnect != null) {
+            newObjectAttributeBean_Mediconnect.setId(objectAttributeBean_Mediconnect.getId());
+        }
+        try {
+            objectAttributeBean_Mediconnect = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_Mediconnect);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    // HCI Domain Groups
+        def objectTypeAttributeBean_hci = objectTypeAttributeFacade.loadObjectTypeAttributeBean(hciGroupsId)
+        def newObjectAttributeBean_hci = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_hci, hciGroups);
+
+        def objectAttributeBean_hci = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_hci.getId());
+        if (objectAttributeBean_hci != null) {
+            newObjectAttributeBean_hci.setId(objectAttributeBean_hci.getId());
+        }
+        try {
+            objectAttributeBean_hci = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_hci);
+        } catch (Exception vie) {
+            log.warn("HCI : Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+     // IHT Domain Groups
+        def objectTypeAttributeBean_iht = objectTypeAttributeFacade.loadObjectTypeAttributeBean(ihtDmainGroupsId)
+        def newObjectAttributeBean_iht = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_iht, ihtDmainGroups);
+
+        /* Load the attribute bean */
+        def objectAttributeBean_iht = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_iht.getId());
+        if (objectAttributeBean_iht != null) {
+            /* If attribute exist reuse the old id for the new attribute */
+            newObjectAttributeBean_iht.setId(objectAttributeBean_iht.getId());
+        }
+        /* Store the object attribute into Insight. */
+        try {
+            objectAttributeBean_iht = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_iht);
+        } catch (Exception vie) {
+            log.warn("IHT : Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    // D2H Domain Groups
+        def objectTypeAttributeBean_d2h = objectTypeAttributeFacade.loadObjectTypeAttributeBean(d2hDmainGroupsId)
+        def newObjectAttributeBean_d2h = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_d2h, d2hDmainGroups);
+
+        def objectAttributeBean_d2h = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_d2h.getId());
+        if (objectAttributeBean_d2h != null) {
+            newObjectAttributeBean_d2h.setId(objectAttributeBean_d2h.getId());
+        }
+        try {
+            objectAttributeBean_d2h = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_d2h);
+        } catch (Exception vie) {
+            log.warn("D2H : Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+      // TIERMEDDC Domain Group    
+        def objectTypeAttributeBean_TiermedDC = objectTypeAttributeFacade.loadObjectTypeAttributeBean(tiermedDCDmainGroupsId)
+        def newObjectAttributeBean_TiermedDC = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_TiermedDC, tiermedDCDmainGroups);
+
+        def objectAttributeBean_TiermedDC = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_TiermedDC.getId());
+        if (objectAttributeBean_TiermedDC != null) {
+            newObjectAttributeBean_TiermedDC.setId(objectAttributeBean_TiermedDC.getId());
+        }
+        try {
+            objectAttributeBean_TiermedDC = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_TiermedDC);
+        } catch (Exception vie) {
+            log.warn("TiermedDC : Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+     // D2HS Domain Groups d2hscom
+        def objectTypeAttributeBean_D2HS = objectTypeAttributeFacade.loadObjectTypeAttributeBean(d2hsDmainGroupsId)
+        def newObjectAttributeBean_D2HS = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBean_D2HS, d2hsDmainGroups);
+
+        def objectAttributeBean_D2HS = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBean_D2HS.getId());
+        if (objectAttributeBean_D2HS != null) {
+            newObjectAttributeBean_D2HS.setId(objectAttributeBean_D2HS.getId());
+        }
+        try {
+            objectAttributeBean_D2HS = objectFacade.storeObjectAttributeBean(newObjectAttributeBean_D2HS);
+        } catch (Exception vie) {
+            log.warn("D2HS : Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+    
+    // Generic Service Request 
+        def objectTypeAttributeBeanGSR = objectTypeAttributeFacade.loadObjectTypeAttributeBean(genericServiceRequestId)
+        def newObjectAttributeBeanGSR = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBeanGSR, genericServiceRequest);
+
+        def objectAttributeBeanGSR = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBeanGSR.getId());
+        if (objectAttributeBeanGSR != null) {
+            newObjectAttributeBeanGSR.setId(objectAttributeBeanGSR.getId());
+        }
+        try {
+            objectAttributeBeanGSR = objectFacade.storeObjectAttributeBean(newObjectAttributeBeanGSR);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+          
+    // latest = true
+        def objectTypeAttributeBeanLatest = objectTypeAttributeFacade.loadObjectTypeAttributeBean(latestId)
+        def newObjectAttributeBeanLatest = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBeanLatest, latest); 
+        
+        def objectAttributeBeanLatest = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBeanLatest.getId());
+        if (objectAttributeBeanLatest != null) {
+            newObjectAttributeBeanLatest.setId(objectAttributeBeanLatest.getId());
+        }
+        try {
+            objectAttributeBeanLatest = objectFacade.storeObjectAttributeBean(newObjectAttributeBeanLatest);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+          
+    // Ready for Production = true
+        def objectTypeAttributeBeanreadyForProduction = objectTypeAttributeFacade.loadObjectTypeAttributeBean(readyForProductionId)
+        def newObjectAttributeBeanreadyForProduction = objectAttributeBeanFactory.createObjectAttributeBeanForObject(rbaMatrixObject, objectTypeAttributeBeanreadyForProduction, readyForProduction); 
+        
+        def objectAttributeBeanreadyForProduction = objectFacade.loadObjectAttributeBean(rbaMatrixObject.getId(), objectTypeAttributeBeanreadyForProduction.getId());
+        if (objectAttributeBeanreadyForProduction != null) {
+            newObjectAttributeBeanreadyForProduction.setId(objectAttributeBeanreadyForProduction.getId());
+        }
+        try {
+            objectAttributeBeanreadyForProduction = objectFacade.storeObjectAttributeBean(newObjectAttributeBeanreadyForProduction);
+        } catch (Exception vie) {
+            log.warn("Could not update object attribute due to validation exception:" + vie.getMessage());
+        }
+     }
+}
+
+class RbaCombination {
+    private String bu;
+    private String sbu;
+    private String role;
+    
+    RbaCombination(String bu, String sbu, String role) {
+        this.bu = bu;
+        this.sbu = sbu;
+        this.role = role;
+        
+        if(this.bu == null) {
+            this.bu = "";
+        }
+        if(this.sbu == null) {
+            this.sbu = "";
+        }
+        if(this.role == null) {
+            this.role = "";
+        }
+    }
+    
+    @Override
+    public int hashCode() {
+        return this.bu.length() + this.sbu.length() + this.role.length();
+    }
+    
+    @Override   
+    public boolean equals(Object object) {
+        if (object == null) {
+            return false;
+        }
+        RbaCombination rbaCombination = object as RbaCombination
+        
+        return rbaCombination.bu.equals(this.bu) && rbaCombination.sbu.equals(this.sbu) && rbaCombination.role.equals(this.role);
+    }
+    
+    @Override   
+    public String toString() {
+        return "\"bu: ${bu}, sbu: ${sbu}, role: ${role}\"";
+    }
+}
